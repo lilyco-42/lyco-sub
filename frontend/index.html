@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>lyco-sub · 字幕工作台</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222b; --line:#2a2f3a;
+    --fg:#e8eaed; --fg-soft:#b6bcc8; --fg-mute:#8a91a0;
+    --brand:#6ea8fe; --ok:#4ade80; --warn:#fbbf24; --err:#f87171;
+    --r:10px; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:light){
+    :root{ --bg:#f6f7f9; --panel:#fff; --panel-2:#f0f2f5; --line:#dfe3e8;
+      --fg:#1a1d23; --fg-soft:#4a515e; --fg-mute:#6b7280; --brand:#2563eb; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 var(--sans);
+       padding:0 0 40px; -webkit-text-size-adjust:100%}
+  header{padding:20px 20px 12px;max-width:980px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 4px;font-weight:600}
+  .sub{color:var(--fg-mute);font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:0 20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+        padding:16px;margin-bottom:14px}
+  .card h2{font-size:14px;margin:0 0 12px;font-weight:600;color:var(--fg-soft)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:150px;flex:1}
+  label{font-size:12px;color:var(--fg-mute)}
+  select,input[type=text],input[type=password]{background:var(--panel-2);color:var(--fg);
+    border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit;width:100%}
+  select:focus,input:focus{outline:2px solid var(--brand);outline-offset:1px}
+  button{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:10px 18px;
+    font:inherit;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--fg-soft);border:1px solid var(--line)}
+  .drop{border:2px dashed var(--line);border-radius:var(--r);padding:28px;text-align:center;
+    color:var(--fg-mute);cursor:pointer;transition:.15s}
+  .drop:hover,.drop.over{border-color:var(--brand);color:var(--brand)}
+  .drop strong{color:var(--fg);display:block;margin-bottom:4px;font-size:15px}
+  .eng{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+  .eng-item{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--fg-soft)}
+  .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .dot.on{background:var(--ok)} .dot.off{background:var(--fg-mute)}
+  .bar{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;margin:10px 0 6px}
+  .bar>i{display:block;height:100%;background:var(--brand);width:0;transition:width .3s}
+  .log{font:12px/1.7 var(--mono);color:var(--fg-soft);background:var(--panel-2);
+       border-radius:8px;padding:10px;max-height:220px;overflow:auto;white-space:pre-wrap;
+       word-break:break-all}
+  .out{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .out a{color:var(--brand);text-decoration:none;font-size:13px;word-break:break-all}
+  .out a:hover{text-decoration:underline}
+  .hint{font-size:12px;color:var(--fg-mute);margin-top:8px;line-height:1.6}
+  .warn{background:color-mix(in srgb,var(--warn) 12%,transparent);
+        border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
+        border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg-soft);margin-top:10px}
+  code{font:12px var(--mono);background:var(--panel-2);padding:2px 5px;border-radius:4px}
+  .tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+  .tabs button{background:none;color:var(--fg-mute);border:0;border-bottom:2px solid transparent;
+    border-radius:0;padding:8px 14px;font-weight:500}
+  .tabs button.active{color:var(--brand);border-bottom-color:var(--brand)}
+  .hide{display:none}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--fg-mute);font-weight:500}
+  @media(max-width:600px){ .field{min-width:100%} header,main{padding-left:14px;padding-right:14px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>lyco-sub · 字幕工作台</h1>
+  <div class="sub">转录 / 翻译 / 烧录 —— 本地推理，也可用 API 与 CLI 驱动</div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="active" data-tab="work">工作台</button>
+    <button data-tab="jobs">任务</button>
+    <button data-tab="api">API</button>
+  </div>
+
+  <!-- 工作台 -->
+  <section id="tab-work">
+    <div class="card">
+      <h2>1. 选择视频</h2>
+      <div class="drop" id="drop">
+        <strong>拖入视频文件，或点击选择</strong>
+        <span>支持 mp4 / mkv / mov / wav / mp3</span>
+      </div>
+      <input type="file" id="file" accept="video/*,audio/*" hidden>
+      <div class="hint" id="fileinfo"></div>
+    </div>
+
+    <div class="card">
+      <h2>2. 参数</h2>
+      <div class="row">
+        <div class="field">
+          <label>ASR 引擎</label>
+          <select id="engine"></select>
+        </div>
+        <div class="field">
+          <label>源语言</label>
+          <select id="language">
+            <option value="">自动</option>
+            <option value="zh">中文</option>
+            <option value="en">英文</option>
+            <option value="ja">日文</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>翻译到（留空不翻译）</label>
+          <select id="to">
+            <option value="">不翻译</option>
+            <option value="en">英文</option>
+            <option value="zh-Hans">简体中文</option>
+            <option value="ja">日文</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>输出</label>
+          <select id="burn">
+            <option value="none">只要字幕文件</option>
+            <option value="soft">软字幕视频（保画质）</option>
+            <option value="hard">硬字幕视频（烧进画面）</option>
+          </select>
+        </div>
+      </div>
+      <div class="eng" id="engines"></div>
+      <div class="warn" id="burnwarn" style="display:none">
+        硬字幕会整片重编码。<code>ultra</code> = CRF 18 保画质但文件大；
+        实测 153MB 源片默认档会压到 3MB。要绝对保真请选软字幕。
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. 开始</h2>
+      <div class="row">
+        <button id="start">开始处理</button>
+        <button id="cancel" class="ghost" disabled>取消</button>
+      </div>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="log" id="log">等待开始…</div>
+      <div class="out" id="out"></div>
+    </div>
+  </section>
+
+  <!-- 任务 -->
+  <section id="tab-jobs" class="hide">
+    <div class="card">
+      <h2>历史任务</h2>
+      <table><thead><tr><th>ID</th><th>状态</th><th>进度</th><th>引擎</th><th>输入</th></tr></thead>
+      <tbody id="jobs"></tbody></table>
+      <div class="hint">任务在服务端串行执行（模型加载吃内存，并发只会互相拖慢）。</div>
+    </div>
+  </section>
+
+  <!-- API -->
+  <section id="tab-api" class="hide">
+    <div class="card">
+      <h2>给 AI / 脚本用</h2>
+      <div class="hint">同一套 core.pipeline，CLI 和 HTTP 行为一致。所有接口都返回稳定 JSON。</div>
+      <div class="log" style="margin-top:10px"># 列出引擎与可用状态
+curl http://127.0.0.1:8043/api/capabilities
+
+# 提交任务（本地路径，免上传）
+curl -X POST http://127.0.0.1:8043/api/jobs/by-path \
+  -H "Content-Type: application/json" \
+  -d '{"path":"D:/v/demo.mp4","asr_engine":"funasr","burn_mode":"hard"}'
+
+# 轮询
+curl http://127.0.0.1:8043/api/jobs/&lt;job_id&gt;</div>
+      <h2 style="margin-top:18px">CLI</h2>
+      <div class="log">lycosub engines                     # 看哪些引擎可用
+lycosub probe demo.mp4 --json       # 探测媒体
+lycosub transcribe demo.mp4 --engine funasr --json
+lycosub translate a.srt --to en --json
+lycosub run demo.mp4 --engine funasr --burn hard --quality ultra --json
+lycosub serve --lan                 # 手机同 WiFi 访问</div>
+      <div class="hint">退出码：0 成功 / 1 运行失败 / 2 用法错误 / 3 引擎不可用 / 4 输入不存在。</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { file: null, jobId: null, poll: null };
+
+// ---- tabs ----
+document.querySelectorAll('.tabs button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    ['work','jobs','api'].forEach(t => $('#tab-'+t).classList.toggle('hide', t !== b.dataset.tab));
+    if (b.dataset.tab === 'jobs') loadJobs();
+  };
+});
+
+// ---- engines ----
+async function loadCapabilities(){
+  try{
+    const r = await fetch('/api/capabilities');
+    const d = await r.json();
+    const sel = $('#engine');
+    sel.innerHTML = '';
+    d.asr.forEach(e => {
+      const o = document.createElement('option');
+      o.value = e.name;
+      o.textContent = e.label + (e.available ? '' : '（不可用）');
+      o.disabled = !e.available;
+      sel.appendChild(o);
+    });
+    const first = d.asr.find(e => e.available);
+    if (first) sel.value = first.name;
+
+    $('#engines').innerHTML = d.asr.map(e =>
+      '<div class="eng-item"><span class="dot ' + (e.available?'on':'off') + '"></span>' +
+      '<b>' + e.name + '</b> ' + (e.available ? '就绪' : e.reason) + '</div>').join('');
+  }catch(err){
+    $('#engines').innerHTML = '<div class="eng-item"><span class="dot off"></span>无法读取引擎状态：' + err.message + '</div>';
+  }
+}
+loadCapabilities();
+
+// ---- file ----
+const drop = $('#drop'), fileInput = $('#file');
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); pick(e.dataTransfer.files[0]); };
+fileInput.onchange = () => pick(fileInput.files[0]);
+
+function pick(f){
+  if (!f) return;
+  state.file = f;
+  $('#fileinfo').textContent = f.name + ' · ' + (f.size/1024/1024).toFixed(1) + ' MB';
+}
+
+$('#burn').onchange = () => {
+  $('#burnwarn').style.display = $('#burn').value === 'hard' ? 'block' : 'none';
+};
+
+// ---- run ----
+$('#start').onclick = async () => {
+  if (!state.file) { log('请先选择视频文件'); return; }
+  const fd = new FormData();
+  fd.append('file', state.file);
+  fd.append('asr_engine', $('#engine').value);
+  fd.append('language', $('#language').value);
+  fd.append('translate_to', $('#to').value);
+  fd.append('burn_mode', $('#burn').value);
+  fd.append('quality', 'ultra');
+
+  $('#start').disabled = true;
+  $('#cancel').disabled = false;
+  $('#out').innerHTML = '';
+  log('上传中…');
+
+  try{
+    const r = await fetch('/api/jobs', { method:'POST', body: fd });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    state.jobId = d.job_id;
+    poll();
+  }catch(err){
+    log('提交失败：' + err.message);
+    reset();
+  }
+};
+
+$('#cancel').onclick = async () => {
+  if (!state.jobId) return;
+  await fetch('/api/jobs/' + state.jobId + '/cancel', { method:'POST' });
+  log('已请求取消');
+};
+
+function poll(){
+  clearInterval(state.poll);
+  state.poll = setInterval(async () => {
+    try{
+      const r = await fetch('/api/jobs/' + state.jobId);
+      const j = await r.json();
+      $('#bar').style.width = j.progress + '%';
+      if (j.message) log('[' + j.progress + '%] ' + j.message);
+
+      if (j.status === 'done'){
+        clearInterval(state.poll); reset();
+        $('#bar').style.width = '100%';
+        renderOutputs(j.result);
+      } else if (j.status === 'failed' || j.status === 'cancelled'){
+        clearInterval(state.poll); reset();
+        log('任务结束：' + j.status + ' ' + (j.error || ''));
+      }
+    }catch(err){
+      clearInterval(state.poll); reset(); log('轮询失败：' + err.message);
+    }
+  }, 1000);
+}
+
+function renderOutputs(res){
+  const box = $('#out');
+  box.innerHTML = '';
+  const items = [
+    ['源字幕', res.source_srt],
+    ['译文', res.translated_srt],
+    ['双语', res.bilingual_srt],
+    ['视频', res.video],
+  ].filter(x => x[1]);
+  if (!items.length) { box.innerHTML = '<div class="hint">没有产出文件</div>'; return; }
+  items.forEach(([label, path]) => {
+    const name = path.split(/[\\/]/).pop();
+    const a = document.createElement('a');
+    a.href = '/api/jobs/' + state.jobId + '/download/' + encodeURIComponent(name);
+    a.textContent = '↓ ' + label + '：' + name;
+    box.appendChild(a);
+  });
+  if (res.source_metrics) {
+    const m = res.source_metrics;
+    const d = document.createElement('div');
+    d.className = 'hint';
+    d.textContent = '字幕质量：' + m.cues + ' 条 / 平均 ' + m.avg_chars +
+      ' 字 / 每秒 ' + m.cps + ' 字 / ' + (m.has_punct ? '有标点' : '无标点');
+    box.appendChild(d);
+  }
+}
+
+function reset(){ $('#start').disabled = false; $('#cancel').disabled = true; }
+
+let lastMsg = '';
+function log(m){
+  if (m === lastMsg) return;
+  lastMsg = m;
+  const el = $('#log');
+  el.textContent += '\n' + m;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---- jobs ----
+async function loadJobs(){
+  const r = await fetch('/api/jobs');
+  const d = await r.json();
+  $('#jobs').innerHTML = d.jobs.length ? d.jobs.map(j =>
+    '<tr><td><code>' + j.id + '</code></td><td>' + j.status + '</td><td>' +
+    j.progress + '%</td><td>' + j.asr_engine + '</td><td>' +
+    (j.input||'').split(/[\\/]/).pop() + '</td></tr>').join('')
+    : '<tr><td colspan="5" class="hint">暂无任务</td></tr>';
+}
+</script>
+</body>
+</html>

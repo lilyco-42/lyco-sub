@@ -1,0 +1,194 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. v0.1.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 发布闸门：测试不过就不出产物
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install deps
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+  build-windows:
+    runs-on: windows-latest
+    needs: tests
+    timeout-minutes: 90
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      # Nuitka 的 C 编译缓存，按依赖锁文件做 key
+      - name: Cache Nuitka
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Nuitka
+          key: nuitka-win-${{ hashFiles('pyproject.toml') }}
+          restore-keys: nuitka-win-
+
+      # 关键：只装轻量依赖，不装 torch/funasr
+      - name: Install deps (no torch)
+        run: uv pip install --system -e .
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -match "refs/tags/(v.*)") {
+            $tag = $Matches[1]
+          } elseif ("${{ inputs.version }}" -ne "") {
+            $tag = "${{ inputs.version }}"
+          } else {
+            $date = Get-Date -Format "yyyyMMdd-HHmm"
+            $m = Select-String -Path pyproject.toml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1
+            $proj = if ($m) { $m.Matches[0].Groups[1].Value } else { "0.1.0" }
+            $tag = "v$proj-$date"
+          }
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Build
+        run: python build_nuitka.py release
+
+      - name: Package
+        run: Compress-Archive -Path dist/lycosub.dist/* -DestinationPath lycosub-windows.zip
+
+      # 清掉同 tag 的残留草稿，避免空壳 Release（rembg-ui 踩过）
+      - name: Remove stale draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          for id in $(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+            --jq ".[] | select(.draft == true and .tag_name == \"$TAG\") | .id" 2>/dev/null || true); do
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$id" >/dev/null || true
+          done
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.version.outputs.tag }}
+          files: lycosub-windows.zip
+          generate_release_notes: true
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: build-windows
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc patchelf ccache
+
+      - name: Cache Nuitka
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Nuitka
+          key: nuitka-linux-${{ hashFiles('pyproject.toml') }}
+          restore-keys: nuitka-linux-
+
+      - name: Install deps (no torch)
+        run: uv pip install --system -e .
+
+      - name: Build
+        run: python build_nuitka.py release
+
+      - name: Package
+        run: tar -czf lycosub-linux.tar.gz -C dist/lycosub.dist .
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-windows.outputs.tag }}
+          files: lycosub-linux.tar.gz
+
+  build-macos:
+    runs-on: macos-latest
+    needs: build-windows
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Cache Nuitka
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Nuitka
+          key: nuitka-macos-${{ hashFiles('pyproject.toml') }}
+          restore-keys: nuitka-macos-
+
+      - name: Install deps (no torch)
+        run: uv pip install --system -e .
+
+      - name: Build
+        run: python build_nuitka.py release
+
+      - name: Package
+        run: |
+          cd dist
+          zip -r lycosub-macos.zip *.app
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-windows.outputs.tag }}
+          files: dist/lycosub-macos.zip

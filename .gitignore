@@ -1,0 +1,40 @@
+# 构建产物
+dist/
+build/
+*.build/
+nuitka-crash-report.xml
+*.pyz
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# 运行时数据
+_out/
+_t/
+jobs/
+uploads/
+*.srt
+*.wav
+*.mp4
+!frontend/**/*.mp4
+
+# 模型（227MB，绝不入库）
+models/
+*.onnx
+*.part
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地配置
+.env
+.env.local

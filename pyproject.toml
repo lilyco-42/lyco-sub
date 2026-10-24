@@ -1,0 +1,30 @@
+[project]
+name = "lyco-sub"
+version = "0.1.0"
+description = "字幕生成工作台 — 转录 / 翻译 / 烧录，人类和 AI 都能用"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.6",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+# 本地离线 ASR：FunASR paraformer-zh（MIT，CPU 快，带标点）
+funasr = ["funasr>=1.1", "modelscope>=1.15", "torch>=2.2", "torchaudio>=2.2"]
+# 本地离线 ASR：faster-whisper（MIT，多语种）
+whisper = ["faster-whisper>=1.0"]
+
+[project.scripts]
+lycosub = "cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["core", "core.asr", "core.translate", "core.render"]

@@ -101,55 +101,58 @@
     </div>
 
     <div class="card">
-      <h2>2. 参数</h2>
+      <h2>2. 一键生成</h2>
       <div class="row">
-        <div class="field">
-          <label>ASR 引擎</label>
-          <select id="engine"></select>
-        </div>
-        <div class="field">
-          <label>源语言</label>
-          <select id="language">
-            <option value="">自动</option>
-            <option value="zh">中文</option>
-            <option value="en">英文</option>
-            <option value="ja">日文</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>翻译到（留空不翻译）</label>
-          <select id="to">
-            <option value="">不翻译</option>
-            <option value="en">英文</option>
-            <option value="zh-Hans">简体中文</option>
-            <option value="ja">日文</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>输出</label>
-          <select id="burn">
-            <option value="none">只要字幕文件</option>
-            <option value="soft">软字幕视频（保画质）</option>
-            <option value="hard">硬字幕视频（烧进画面）</option>
-          </select>
-        </div>
-      </div>
-      <div class="eng" id="engines"></div>
-      <div class="warn" id="burnwarn" style="display:none">
-        硬字幕会整片重编码。<code>ultra</code> = CRF 18 保画质但文件大；
-        实测 153MB 源片默认档会压到 3MB。要绝对保真请选软字幕。
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>3. 开始</h2>
-      <div class="row">
-        <button id="start">开始处理</button>
+        <button id="start" class="primary">生成字幕</button>
         <button id="cancel" class="ghost" disabled>取消</button>
       </div>
+      <div class="hint" id="what">
+        默认输出<b>软字幕视频</b>（画质无损，播放器可开关字幕）。需要烧进画面再展开高级选项。
+      </div>
       <div class="bar"><i id="bar"></i></div>
-      <div class="log" id="log">等待开始…</div>
+      <div class="log" id="log">选择视频后点上面的按钮即可。</div>
       <div class="out" id="out"></div>
+
+      <details id="advanced">
+        <summary>高级选项</summary>
+        <div class="row" style="margin-top:12px">
+          <div class="field">
+            <label>ASR 引擎</label>
+            <select id="engine"></select>
+          </div>
+          <div class="field">
+            <label>源语言</label>
+            <select id="language">
+              <option value="">自动</option>
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+              <option value="ja">日文</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>翻译到（留空不翻译）</label>
+            <select id="to">
+              <option value="">不翻译</option>
+              <option value="en">英文</option>
+              <option value="zh-Hans">简体中文</option>
+              <option value="ja">日文</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>输出</label>
+            <select id="burn">
+              <option value="soft" selected>软字幕视频（保画质）</option>
+              <option value="none">只要字幕文件</option>
+              <option value="hard">硬字幕视频（烧进画面）</option>
+            </select>
+          </div>
+        </div>
+        <div class="eng" id="engines"></div>
+        <div class="warn" id="burnwarn" style="display:none">
+          硬字幕会整片重编码。<code>ultra</code> = CRF 18 保画质但文件大；
+          实测 153MB 源片默认档会压到 3MB。要绝对保真请选软字幕。
+        </div>
+      </details>
     </div>
   </section>
 
@@ -218,8 +221,15 @@ async function loadCapabilities(){
       o.disabled = !e.available;
       sel.appendChild(o);
     });
-    const first = d.asr.find(e => e.available);
-    if (first) sel.value = first.name;
+    // 小白模式：自动挑最省事且能出字幕的引擎。
+    // 优先级：sherpa（27MB 依赖、0.1s 启动、带时间戳）
+    //       > funasr（带标点但启动 31s）
+    //       > funasr-fast（快但无标点）
+    // whisper / jianying 不自动选：前者慢且中文专名差，后者是私有接口需显式开启。
+    const PREF = ['sherpa', 'funasr', 'funasr-fast'];
+    const auto = PREF.map(n => d.asr.find(e => e.name === n && e.available)).find(Boolean)
+              || d.asr.find(e => e.available);
+    if (auto) sel.value = auto.name;
 
     $('#engines').innerHTML = d.asr.map(e =>
       '<div class="eng-item"><span class="dot ' + (e.available?'on':'off') + '"></span>' +
@@ -242,6 +252,9 @@ function pick(f){
   if (!f) return;
   state.file = f;
   $('#fileinfo').textContent = f.name + ' · ' + (f.size/1024/1024).toFixed(1) + ' MB';
+  // 选完就能按，不用再找按钮
+  $('#start').disabled = false;
+  $('#start').focus();
 }
 
 $('#burn').onchange = () => {
@@ -249,8 +262,21 @@ $('#burn').onchange = () => {
 };
 
 // ---- run ----
+// ⚠️ 用 busy 标志防重入：按钮 disabled 在 async 里不够快，
+// 连点两下会提交两个任务（截图里"上传中…"出现两遍就是这个原因）。
+state.busy = false;
+
 $('#start').onclick = async () => {
+  if (state.busy) return;
   if (!state.file) { log('请先选择视频文件'); return; }
+
+  state.busy = true;
+  $('#start').disabled = true;
+  $('#cancel').disabled = false;
+  $('#out').innerHTML = '';
+  $('#log').textContent = '';   // 每次跑清空，避免上次日志混进来
+  lastMsg = '';
+
   const fd = new FormData();
   fd.append('file', state.file);
   fd.append('asr_engine', $('#engine').value);
@@ -259,9 +285,6 @@ $('#start').onclick = async () => {
   fd.append('burn_mode', $('#burn').value);
   fd.append('quality', 'ultra');
 
-  $('#start').disabled = true;
-  $('#cancel').disabled = false;
-  $('#out').innerHTML = '';
   log('上传中…');
 
   try{
@@ -332,7 +355,11 @@ function renderOutputs(res){
   }
 }
 
-function reset(){ $('#start').disabled = false; $('#cancel').disabled = true; }
+function reset(){
+  state.busy = false;
+  $('#start').disabled = false;
+  $('#cancel').disabled = true;
+}
 
 let lastMsg = '';
 function log(m){

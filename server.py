@@ -84,11 +84,15 @@ async def probe(file: UploadFile = File(...)) -> dict:
 @app.post("/api/jobs")
 async def create_job(
     file: UploadFile = File(...),
-    asr_engine: str = Form("funasr"),
+    # 默认值按"小白一键"设计：
+    # - sherpa：27MB 依赖、0.1s 启动、带时间戳，最不容易劝退
+    # - soft：软字幕不重编码，画质无损（hard 会把 153MB 压到 3MB）
+    # 想改行为再显式传参。
+    asr_engine: str = Form("sherpa"),
     language: str = Form(""),
     translate_to: str = Form(""),
     translator: str = Form("llm"),
-    burn_mode: str = Form("none"),
+    burn_mode: str = Form("soft"),
     quality: str = Form("ultra"),
 ) -> dict:
     """上传视频并提交处理任务。"""
@@ -122,11 +126,11 @@ def create_job_by_path(payload: dict) -> dict:
     spec = JobSpec(
         input_path=path,
         out_dir=str(settings.jobs_dir / job_id),
-        asr_engine=payload.get("asr_engine", "funasr"),
+        asr_engine=payload.get("asr_engine", "sherpa"),
         language=payload.get("language") or None,
         translate_to=payload.get("translate_to") or None,
         translator=payload.get("translator", "llm"),
-        burn_mode=payload.get("burn_mode", "none"),
+        burn_mode=payload.get("burn_mode", "soft"),
         quality=payload.get("quality", "ultra"),
     )
     job = jobs.submit(spec, job_id=job_id)

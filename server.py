@@ -8,12 +8,13 @@
 
 from __future__ import annotations
 
+import io
 import shutil
 import uuid
 import webbrowser
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -178,8 +179,50 @@ def index() -> HTMLResponse:
     return HTMLResponse(FRONTEND.read_text(encoding="utf-8"))
 
 
-if (Path(__file__).parent / "frontend").exists():
-    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "frontend")), name="static")
+# ---------------- PWA（Android / iOS 可安装） ----------------
+# 手机浏览器打开后「添加到主屏幕」即可当 App 用。
+# 推理仍在本机后端，手机只是遥控器 + 预览 —— 这是最低成本的 Android 支持。
+
+FRONTEND_DIR = Path(__file__).parent / "frontend"
+
+
+@app.get("/manifest.webmanifest")
+def manifest() -> FileResponse:
+    path = FRONTEND_DIR / "manifest.webmanifest"
+    if not path.exists():
+        return JSONResponse({"error": "manifest 缺失"}, status_code=404)
+    return FileResponse(path, media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def service_worker() -> FileResponse:
+    """Service Worker 必须从根路径提供，否则 scope 受限。"""
+    path = FRONTEND_DIR / "sw.js"
+    if not path.exists():
+        return JSONResponse({"error": "sw.js 缺失"}, status_code=404)
+    return FileResponse(path, media_type="application/javascript")
+
+
+@app.get("/icon.svg")
+def icon_svg() -> Response:
+    """PWA 图标用 SVG 内联生成。
+
+    不用 PIL 出 PNG：PIL 不是运行时必需依赖，为了一个图标多装一个包不值得，
+    而且装了 Nuitka 还要多打一份二进制。现代浏览器（Chrome/Safari/Edge）
+    都支持 SVG 图标。
+    """
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<rect width="512" height="512" rx="96" fill="#0f1115"/>
+<rect x="88" y="150" width="336" height="212" rx="28" fill="none" stroke="#4da3ff" stroke-width="18"/>
+<rect x="140" y="212" width="232" height="18" rx="9" fill="#4da3ff"/>
+<rect x="140" y="262" width="232" height="18" rx="9" fill="#4da3ff" opacity=".75"/>
+<rect x="140" y="312" width="150" height="18" rx="9" fill="#4da3ff" opacity=".5"/>
+</svg>"""
+    return Response(svg, media_type="image/svg+xml")
+
+
+if FRONTEND_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
 def main() -> None:

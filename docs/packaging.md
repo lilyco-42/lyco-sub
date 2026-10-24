@@ -107,12 +107,36 @@ DRY_RUN=1 ./scripts/release.sh
 - 三平台都**只装轻量依赖**，不装 torch；
 - 每个平台缓存 Nuitka 的 C 编译产物，key 用 pyproject.toml 的 hash。
 
-## 未验证的部分
+## 本机不编译，一律走 CI
 
-- ❌ Windows 完整 release 构建（本机 MinGW 下载受阻，仅跑到 C 编译阶段）
-- ❌ Linux 构建（无环境）
-- ❌ macOS 构建（无环境）
-- ❌ 产物实际启动测试
+**本机不跑 Nuitka 构建。** 原因：
 
-**不要把这些说成"已验证"。** 脚本逻辑和依赖分析是实测的，
-但端到端产物需要 CI 跑一次才能确认。
+1. Nuitka 在 Windows 上强依赖特定版本的 winlibs-gcc（15.2.0posix-13.0.0-msvcrt-r6），
+   不接受系统装的 Scoop gcc。它会自动下载，但 GitHub Release 在国内网络下经常
+   中断，zip 变 0 字节，然后 Nuitka 删掉重试，形成循环；
+2. 如果同时有别的进程占着那个 zip，会报 `WinError 32`；
+3. 即使绕过（`LYCOSUB_FORCE_LOCAL_GCC=1` + `--experimental=force-accept-windows-gcc`），
+   本机编译要占用几十个 gcc 进程、十几分钟，把机器拖死。
+
+正确做法：**push 到 GitHub，让 Actions 的干净环境构建。**
+
+```bash
+git push                      # 触发 CI
+gh run watch                  # 看进度
+gh run view --log-failed      # 看失败原因
+```
+
+CI 的 Windows runner 自带 MSVC，不需要下 MinGW，比本机可靠得多。
+
+## 验证状态
+
+| 项目 | 状态 |
+|---|---|
+| 单元测试（13 个，跨平台） | ✅ 本地 + CI 均通过 |
+| sherpa 引擎端到端（转录 1.4s / 烧录 16s） | ✅ 本地实测 |
+| CLI 契约（dry-run / JSON / exit code） | ✅ 本地实测 |
+| Windows CI 构建 | 🔄 进行中 |
+| Linux / macOS CI 构建 | ⏳ 等 Windows 完成 |
+| 产物实际启动 | ⏳ 未验证 |
+
+**不要把"CI 在跑"说成"已验证"。**

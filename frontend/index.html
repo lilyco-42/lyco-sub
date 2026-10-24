@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>lyco-sub · 字幕工作台</title>
+<!-- PWA：手机浏览器「添加到主屏幕」即可当 App 用 -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="lyco-sub">
+<link rel="apple-touch-icon" href="/icon.svg">
 <style>
   :root{
     --bg:#0f1115; --panel:#171a21; --panel-2:#1e222b; --line:#2a2f3a;
@@ -345,6 +352,17 @@ async function loadJobs(){
     j.progress + '%</td><td>' + j.asr_engine + '</td><td>' +
     (j.input||'').split(/[\\/]/).pop() + '</td></tr>').join('')
     : '<tr><td colspan="5" class="hint">暂无任务</td></tr>';
+}
+</script>
+<script>
+// 注册 Service Worker（PWA 可安装 + 外壳离线）
+// 只在 https 或 localhost 下生效，局域网 http 访问会静默跳过 —— 这是浏览器限制，不是 bug。
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* 静默失败：http 局域网访问时注册会被拒，不影响正常使用 */
+    });
+  });
 }
 </script>
 </body>

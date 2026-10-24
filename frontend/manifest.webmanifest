@@ -1,0 +1,27 @@
+{
+  "name": "lyco-sub 字幕工作台",
+  "short_name": "lyco-sub",
+  "description": "视频字幕生成：转录 / 翻译 / 烧录",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "video"],
+  "shortcuts": [
+    {
+      "name": "新建任务",
+      "url": "/?tab=workbench"
+    }
+  ]
+}

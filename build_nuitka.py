@@ -29,6 +29,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+# GitHub Actions 的 Windows runner 默认 stdout 是 cp1252，
+# 打印中文（"已清理 dist" 之类）会抛 UnicodeEncodeError 直接中断构建。
+# rembg-ui 也踩过这个坑。
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+except (AttributeError, ValueError):
+    pass
+
 try:
     import tomllib  # Python 3.11+
 except ImportError:  # pragma: no cover

@@ -41,6 +41,37 @@ app = FastAPI(title="lyco-sub", version="0.1.0",
 @app.on_event("startup")
 def _startup() -> None:
     jobs.start()
+    _prefetch_model_async()
+
+
+def _prefetch_model_async() -> None:
+    """启动时后台预下载模型。
+
+    首次使用要下 230MB（实测 0.44–0.81 MB/s，5–8 分钟）。
+    如果等用户点了「生成字幕」才下，界面会长时间停在 3%，像卡死。
+
+    这里在服务启动后就悄悄开始拉，用户选文件、看界面的时间正好用来下载。
+    失败不报错——真正转录时会再试一次并给出明确提示。
+    """
+    import threading
+
+    def _worker() -> None:
+        try:
+            from core.asr.sherpa_engine import MODELS, SherpaEngine, _model_dir
+
+            name = "sense-voice"
+            spec = MODELS.get(name)
+            if not spec:
+                return
+            d = _model_dir(name)
+            if all((d / f).exists() for f in spec["files"]):
+                return  # 已有模型，什么都不做
+            engine = SherpaEngine()
+            engine._ensure_model(name)
+        except Exception:  # noqa: BLE001
+            pass  # 预下载失败无所谓，转录时会重新尝试并报明确错误
+
+    threading.Thread(target=_worker, daemon=True, name="model-prefetch").start()
 
 
 # ---------------- 能力发现 ----------------
@@ -61,6 +92,32 @@ def capabilities() -> dict:
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True, "data_dir": str(settings.data_dir)}
+
+
+@app.get("/api/model-status")
+def model_status() -> dict:
+    """模型是否就绪 —— 前端用它显示「首次使用需下载 230MB」的提示。"""
+    try:
+        from core.asr.sherpa_engine import MODELS, _model_dir
+
+        spec = MODELS["sense-voice"]
+        d = _model_dir("sense-voice")
+        have = [f for f in spec["files"] if (d / f).exists()]
+        total = 0
+        for f in have:
+            try:
+                total += (d / f).stat().st_size
+            except OSError:
+                pass
+        return {
+            "model": "sense-voice",
+            "ready": len(have) == len(spec["files"]),
+            "files": f"{len(have)}/{len(spec['files'])}",
+            "size_mb": round(total / 1024 / 1024, 1),
+            "expected_size": spec["size"],
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ready": False, "error": str(exc)}
 
 
 # ---------------- 媒体 ----------------

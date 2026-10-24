@@ -109,6 +109,9 @@
       <div class="hint" id="what">
         默认输出<b>软字幕视频</b>（画质无损，播放器可开关字幕）。需要烧进画面再展开高级选项。
       </div>
+      <div class="warn" id="modelwarn" style="display:none">
+        首次使用需要下载语音模型（约 230MB，5–8 分钟，只需一次）。正在后台准备…
+      </div>
       <div class="bar"><i id="bar"></i></div>
       <div class="log" id="log">选择视频后点上面的按钮即可。</div>
       <div class="out" id="out"></div>
@@ -239,6 +242,20 @@ async function loadCapabilities(){
   }
 }
 loadCapabilities();
+checkModel();
+
+// 模型没就绪时给明确预期，避免用户以为卡死
+async function checkModel(){
+  try{
+    const r = await fetch('/api/model-status');
+    const d = await r.json();
+    if (!d.ready) {
+      $('#modelwarn').style.display = 'block';
+      $('#modelwarn').textContent =
+        '首次使用需要下载语音模型（约 230MB，5–8 分钟，只需一次）。正在后台准备…';
+    }
+  }catch(e){ /* 老版本后端没有这个接口，忽略 */ }
+}
 
 // ---- file ----
 const drop = $('#drop'), fileInput = $('#file');

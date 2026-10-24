@@ -105,7 +105,10 @@ def build(mode: str = "release", with_funasr: bool = False) -> None:
         "--copyright=Copyright (c) lilyco-42",
         "--assume-yes-for-downloads",
         f"--output-dir={dist_dir}",
-        str(ROOT / "server.py"),
+        # 入口用 app.py 而不是 server.py：
+        # 无参数双击 → 开 Web；带参数 → 走 CLI。
+        # 直接打包 server.py 会导致 --help 也去启动服务器（实测踩过）。
+        str(ROOT / "app.py"),
     ]
 
     if sys.platform.startswith("win"):

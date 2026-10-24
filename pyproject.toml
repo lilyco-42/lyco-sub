@@ -14,10 +14,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# 本地离线 ASR：FunASR paraformer-zh（MIT，CPU 快，带标点）
+# 本地离线 ASR：sherpa-onnx（Apache-2.0，27MB，无 torch，桌面打包首选）
+sherpa = ["sherpa-onnx>=1.10"]
+# 本地离线 ASR：FunASR paraformer-zh（MIT，CPU 快，带标点）—— 会拉 476MB torch
 funasr = ["funasr>=1.1", "modelscope>=1.15", "torch>=2.2", "torchaudio>=2.2"]
 # 本地离线 ASR：faster-whisper（MIT，多语种）
 whisper = ["faster-whisper>=1.0"]
+# 开发/CI
+dev = ["nuitka>=2.4"]
 
 [project.scripts]
 lycosub = "cli:main"

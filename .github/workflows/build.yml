@@ -32,7 +32,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
         with:
-          enable-cache: true
+          enable-cache: false
 
       - name: Install deps
         run: uv pip install --system -e ".[dev]"
@@ -55,7 +55,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
         with:
-          enable-cache: true
+          enable-cache: false
 
       # Nuitka 的 C 编译缓存，按依赖锁文件做 key
       - name: Cache Nuitka
@@ -65,9 +65,9 @@ jobs:
           key: nuitka-win-${{ hashFiles('pyproject.toml') }}
           restore-keys: nuitka-win-
 
-      # 关键：只装轻量依赖，不装 torch/funasr
+      # 关键：只装轻量依赖（sherpa-onnx 27MB），不装 torch/funasr（476MB+）
       - name: Install deps (no torch)
-        run: uv pip install --system -e .
+        run: uv pip install --system -e ".[sherpa,dev]"
 
       - name: Get version
         id: version
@@ -125,7 +125,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
         with:
-          enable-cache: true
+          enable-cache: false
 
       - name: System deps
         run: |
@@ -140,7 +140,7 @@ jobs:
           restore-keys: nuitka-linux-
 
       - name: Install deps (no torch)
-        run: uv pip install --system -e .
+        run: uv pip install --system -e ".[sherpa,dev]"
 
       - name: Build
         run: python build_nuitka.py release
@@ -167,7 +167,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
         with:
-          enable-cache: true
+          enable-cache: false
 
       - name: Cache Nuitka
         uses: actions/cache@v4
@@ -177,7 +177,7 @@ jobs:
           restore-keys: nuitka-macos-
 
       - name: Install deps (no torch)
-        run: uv pip install --system -e .
+        run: uv pip install --system -e ".[sherpa,dev]"
 
       - name: Build
         run: python build_nuitka.py release

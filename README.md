@@ -33,15 +33,38 @@ CLI 与 HTTP 共用同一套 `core.pipeline`，不存在两套逻辑。
 
 ---
 
-## 快速开始
+## 下载即用（小白）
+
+到 [Releases](https://github.com/lilyco-42/lyco-sub/releases) 下载对应平台：
+
+| 平台 | 文件 | 大小 |
+|---|---|---|
+| Windows x64 | `lycosub-windows.zip` | 28 MB |
+| Linux x64 | `lycosub-linux.tar.gz` | 45 MB |
+| macOS | `lycosub-macos.zip` | 29 MB |
+
+解压 → 双击 → 浏览器自动打开 → 拖入视频 → 点「生成字幕」。
+
+**首次使用要下载语音模型（约 230MB，5–8 分钟，只需一次）**，之后秒开。
+
+默认输出**软字幕视频**（画质无损），不是硬字幕。原因见 [docs/one-click.md](docs/one-click.md)。
+
+---
+
+## 快速开始（源码）
 
 ```bash
 uv venv .venv --python 3.11
-uv pip install --python .venv/Scripts/python.exe -e .
+uv pip install --python .venv/Scripts/python.exe -e ".[sherpa]"
 
-# 装一个本地 ASR 引擎（二选一）
-uv pip install --python .venv/Scripts/python.exe funasr modelscope torch torchaudio
-uv pip install --python .venv/Scripts/python.exe faster-whisper
+# 可选：其他引擎
+uv pip install --python .venv/Scripts/python.exe -e ".[funasr]"   # 476MB torch
+uv pip install --python .venv/Scripts/python.exe -e ".[whisper]"
+```
+
+```bash
+python app.py            # 无参数 = 桌面模式，起服务 + 开浏览器
+python app.py --help     # 带参数 = CLI 模式
 ```
 
 需要 **ffmpeg / ffprobe 在 PATH 中**。

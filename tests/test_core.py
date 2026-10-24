@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -106,11 +106,23 @@ class TestRender(unittest.TestCase):
     def test_filter_path_escaping_windows(self):
         from core.render.burn import _escape_filter_path
 
-        p = Path("C:/tmp/a b.srt")
+        # 直接用 PureWindowsPath 构造，绕开 p.resolve() 的平台差异：
+        # 在 Linux CI 上 Path("C:/x") 没有盘符，转义分支根本不会触发
+        # （这正是这个测试曾经在 CI 失败的原因）。
+        p = PureWindowsPath("C:/tmp/a b.srt")
         out = _escape_filter_path(p)
         # Windows 盘符冒号必须被转义，否则 ffmpeg 会当成滤镜选项分隔符
         self.assertIn("\\:", out)
+        self.assertTrue(out.startswith("C\\:"))
         self.assertNotIn("\\", out.replace("\\:", ""))
+
+    def test_filter_path_escaping_posix(self):
+        from core.render.burn import _escape_filter_path
+
+        # POSIX 路径没有盘符，不该被转义
+        p = Path("/tmp/a b.srt")
+        out = _escape_filter_path(p)
+        self.assertNotIn("\\:", out)
 
     def test_quality_map(self):
         from core.render.burn import QUALITY_CRF

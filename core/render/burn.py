@@ -35,8 +35,19 @@ class BurnOptions:
 
 
 def _escape_filter_path(p: Path) -> str:
-    """ffmpeg subtitles 滤镜在 Windows 上必须转义盘符冒号和反斜杠。"""
-    s = str(p.resolve()).replace("\\", "/")
+    """ffmpeg subtitles 滤镜路径转义。
+
+    Windows 上必须把盘符冒号写成 \\: —— 否则 ffmpeg 把 "C:" 里的冒号
+    当成滤镜选项分隔符，报 "Unable to parse original_size"（实测踩过）。
+
+    注意 resolve() 会受当前工作目录影响：在 Windows 上传入 POSIX 路径
+    "/tmp/x.srt" 会被解析成 "D:/tmp/x.srt"，凭空多出盘符。所以这里
+    只对**传入时本来就带盘符**的路径做转义，避免误伤。
+    """
+    # 不调 p.resolve()：它会按当前工作目录改写路径，在 Windows 上把
+    # POSIX 风格路径 "/tmp/x.srt" 变成 "D:/tmp/x.srt"，凭空造出盘符。
+    # 调用方（pipeline）传进来的本来就是绝对路径，这里只做字符串处理。
+    s = str(p).replace("\\", "/")
     if len(s) > 1 and s[1] == ":":
         s = s[0] + "\\:" + s[2:]
     return s.replace("'", "\\'")
